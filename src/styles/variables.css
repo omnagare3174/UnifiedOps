@@ -1,0 +1,93 @@
+:root {
+  /* Backgrounds — full-dark cards on a lit charcoal canvas */
+  --bg-main:        #16161B;
+  --bg-secondary:   #1B1B22;
+  --bg-card:        #0A0A0E;
+  --bg-elev:        #14141A;
+  --bg-sidebar:     #0F0F14;
+  --bg-header:      #0A0A0E;
+
+  /* Primary brand (cyan) */
+  --primary:        #00C2FF;
+  --primary-hover:  #1E90FF;
+  --primary-glow:   #5CE1FF;
+  --primary-soft:   #7FDBFF;
+  --logo-grad-from: #00E0FF;
+  --logo-grad-to:   #007BFF;
+
+  /* Status */
+  --healthy:        #00D26A;
+  --warning:        #FFB020;
+  --critical:       #FF4D4F;
+  --offline:        #6B7280;
+  --maintenance:    #9B5CFF;
+  --unknown:        #64748B;
+
+  /* Severity (UI-friendly aliases) */
+  --sev-critical:   #FF4D4F;
+  --sev-error:      #FF7A6F;
+  --sev-warning:    #FFB020;
+  --sev-notice:     #FACC15;
+  --sev-info:       #4DA3FF;
+  --sev-ok:         #00D26A;
+
+  /* Vendors */
+  --hitachi:        #E60012;
+  --hitachi-soft:   #FF4D5A;
+  --netapp:         #0067C5;
+  --netapp-soft:    #4DA3FF;
+  --dell:           #00A3E0;
+  --dell-soft:      #5CE1FF;
+  --brocade:        #FF6A00;
+  --brocade-soft:   #FFA24D;
+
+  /* Location colors (chart palette) */
+  --loc-cdvl:       #1E90FF;
+  --loc-bcp:        #9B5CFF;
+  --loc-sify:       #00D26A;
+
+  /* Typography */
+  --text-primary:   #EAF2FF;
+  --text-secondary: #9FB3C8;
+  --text-muted:     #7C8CA5;
+  --text-dim:       #64748B;
+  --text-disabled:  #6B7280;
+  --text-link:      #4DA3FF;
+
+  /* Borders — graphite */
+  --border-soft:    #25252B;
+  --border-mid:     #2F2F37;
+  --border-card:    #3A3A44;
+  --border-strong:  #4A4A56;
+  --border-hover:   #4DA3FF;
+  --border-active:  #00C2FF;
+
+  /* Glows */
+  --glow-blue:      0 0 24px rgba(0, 194, 255, 0.35);
+  --glow-green:     0 0 24px rgba(0, 210, 106, 0.35);
+  --glow-red:       0 0 24px rgba(255, 77, 79, 0.35);
+  --glow-orange:    0 0 24px rgba(255, 106, 0, 0.35);
+
+  /* Shadows */
+  --shadow-card:    0 1px 0 rgba(255, 255, 255, 0.025) inset,
+                    0 10px 30px -10px rgba(0, 0, 0, 0.75);
+  --shadow-pop:     0 18px 40px rgba(0, 0, 0, 0.7);
+
+  /* Radii — slightly less rounded per design feedback */
+  --r-sm:           4px;
+  --r-md:           6px;
+  --r-lg:           8px;
+  --r-xl:           10px;
+
+  /* Typography stacks */
+  --font-base:      'Inter', 'IBM Plex Sans', system-ui, -apple-system, sans-serif;
+  --font-display:   'Rajdhani', 'Orbitron', 'Inter', system-ui, sans-serif;
+  --font-mono:      'JetBrains Mono', ui-monospace, 'Cascadia Mono', Menlo, Consolas, monospace;
+
+  /* Legacy aliases kept for older references */
+  --bg-app:         var(--bg-main);
+  --bg-card-2:      var(--bg-secondary);
+  --accent-cyan:    var(--primary);
+  --accent-sky:     var(--primary-hover);
+  --accent-blue:    var(--primary-hover);
+}

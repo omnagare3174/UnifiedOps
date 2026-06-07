@@ -1,0 +1,108 @@
+# -----------------------------------------------------------------------------
+# UnifiedOps - local dev InfluxDB v2 (Podman) - 3-instance topology
+#
+# Production runs one influxdb2 native RPM systemd service per pipeline
+# VM (CDVL / BCP / SIFY). For local dev we spin up THREE rootless Podman
+# containers so the listener launchers and the FastAPI server can talk
+# to per-location InfluxDB endpoints exactly as they would in prod -
+# only the URLs change (127.0.0.1:8086 / :8087 / :8088 instead of the
+# pipeline VM IPs).
+#
+# Port map:
+#   CDVL  -> http://127.0.0.1:8086   bucket: SYSLOG_HIT_Bucket
+#   BCP   -> http://127.0.0.1:8087   bucket: SYSLOG_HIT_BCP_Bucket
+#   SIFY  -> http://127.0.0.1:8088   bucket: SYSLOG_HIT_SIFY_Bucket
+#
+# Usage:
+#   cd dev
+#   cp .env.example .env
+#   podman-compose -f podman-compose.yml up -d
+#   ./bootstrap-influx.sh           # waits for /health, prints env block
+#   podman-compose -f podman-compose.yml down
+#   podman volume rm \
+#       dev_influxdb2-data-cdvl dev_influxdb2-config-cdvl \
+#       dev_influxdb2-data-bcp  dev_influxdb2-config-bcp \
+#       dev_influxdb2-data-sify dev_influxdb2-config-sify
+# -----------------------------------------------------------------------------
+version: "3.8"
+
+services:
+  influxdb-cdvl:
+    image: docker.io/influxdb:2.7
+    container_name: unifiedops-influxdb-cdvl
+    restart: unless-stopped
+    ports:
+      - "${INFLUX_CDVL_HOST_PORT:-8086}:8086"
+    environment:
+      DOCKER_INFLUXDB_INIT_MODE: setup
+      DOCKER_INFLUXDB_INIT_USERNAME: ${INFLUX_USERNAME:-admin}
+      DOCKER_INFLUXDB_INIT_PASSWORD: ${INFLUX_PASSWORD:-adminadmin}
+      DOCKER_INFLUXDB_INIT_ORG: ${INFLUX_ORG:-HDFC}
+      DOCKER_INFLUXDB_INIT_BUCKET: ${INFLUX_CDVL_BUCKET:-SYSLOG_HIT_Bucket}
+      DOCKER_INFLUXDB_INIT_RETENTION: ${INFLUX_RETENTION:-0}
+      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: ${INFLUX_CDVL_TOKEN:-unifiedops-dev-token-cdvl}
+    volumes:
+      - influxdb2-data-cdvl:/var/lib/influxdb2:Z
+      - influxdb2-config-cdvl:/etc/influxdb2:Z
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8086/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 15s
+
+  influxdb-bcp:
+    image: docker.io/influxdb:2.7
+    container_name: unifiedops-influxdb-bcp
+    restart: unless-stopped
+    ports:
+      - "${INFLUX_BCP_HOST_PORT:-8087}:8086"
+    environment:
+      DOCKER_INFLUXDB_INIT_MODE: setup
+      DOCKER_INFLUXDB_INIT_USERNAME: ${INFLUX_USERNAME:-admin}
+      DOCKER_INFLUXDB_INIT_PASSWORD: ${INFLUX_PASSWORD:-adminadmin}
+      DOCKER_INFLUXDB_INIT_ORG: ${INFLUX_ORG:-HDFC}
+      DOCKER_INFLUXDB_INIT_BUCKET: ${INFLUX_BCP_BUCKET:-SYSLOG_HIT_BCP_Bucket}
+      DOCKER_INFLUXDB_INIT_RETENTION: ${INFLUX_RETENTION:-0}
+      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: ${INFLUX_BCP_TOKEN:-unifiedops-dev-token-bcp}
+    volumes:
+      - influxdb2-data-bcp:/var/lib/influxdb2:Z
+      - influxdb2-config-bcp:/etc/influxdb2:Z
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8086/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 15s
+
+  influxdb-sify:
+    image: docker.io/influxdb:2.7
+    container_name: unifiedops-influxdb-sify
+    restart: unless-stopped
+    ports:
+      - "${INFLUX_SIFY_HOST_PORT:-8088}:8086"
+    environment:
+      DOCKER_INFLUXDB_INIT_MODE: setup
+      DOCKER_INFLUXDB_INIT_USERNAME: ${INFLUX_USERNAME:-admin}
+      DOCKER_INFLUXDB_INIT_PASSWORD: ${INFLUX_PASSWORD:-adminadmin}
+      DOCKER_INFLUXDB_INIT_ORG: ${INFLUX_ORG:-HDFC}
+      DOCKER_INFLUXDB_INIT_BUCKET: ${INFLUX_SIFY_BUCKET:-SYSLOG_HIT_SIFY_Bucket}
+      DOCKER_INFLUXDB_INIT_RETENTION: ${INFLUX_RETENTION:-0}
+      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: ${INFLUX_SIFY_TOKEN:-unifiedops-dev-token-sify}
+    volumes:
+      - influxdb2-data-sify:/var/lib/influxdb2:Z
+      - influxdb2-config-sify:/etc/influxdb2:Z
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8086/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 15s
+
+volumes:
+  influxdb2-data-cdvl:
+  influxdb2-config-cdvl:
+  influxdb2-data-bcp:
+  influxdb2-config-bcp:
+  influxdb2-data-sify:
+  influxdb2-config-sify:

@@ -1,0 +1,6 @@
+fastapi>=0.115,<0.130
+uvicorn[standard]>=0.30,<0.50
+httpx>=0.28,<0.30
+influxdb-client>=1.40,<2
+python-dotenv>=1.0,<2
+websockets>=12,<17

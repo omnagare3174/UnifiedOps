@@ -1,0 +1,46 @@
+; ============================================================================
+; UnifiedOps UI server — FastAPI (server.py)
+;
+; Responsibilities:
+;   - Pools alert data from all 8 vendor InfluxDB buckets across the
+;     3 listener servers (every 5 s) and pushes to React via WebSocket.
+;   - Serves the built React bundle (frontend/dist/) over HTTP/HTTPS.
+;   - Proxies /influx* to the 3 listener-server InfluxDBs for ad-hoc
+;     Flux queries from the browser when /api can't serve directly.
+;
+;   * Does NOT touch the heartbeat buckets — that's health_check.py.
+;
+; Install:
+;   sudo cp deploy/unifiedops-ui-server.service /etc/systemd/system/
+;   sudo cp deploy/unifiedops.env.example       /etc/unifiedops/ui.env
+;   sudo vi  /etc/unifiedops/ui.env                  (tokens, URLs, TLS)
+;   sudo systemctl daemon-reload
+;   sudo systemctl enable --now unifiedops-ui-server
+;
+; ============================================================================
+[Unit]
+Description=UnifiedOps v2 UI server (FastAPI alerts/dashboard WebSocket)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=unifiedops
+Group=unifiedops
+WorkingDirectory=/opt/unifiedops
+EnvironmentFile=/etc/unifiedops/ui.env
+ExecStart=/opt/unifiedops/.venv/bin/python /opt/unifiedops/server/server.py
+Restart=on-failure
+RestartSec=4
+StandardOutput=journal
+StandardError=journal
+
+# Hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/var/log/unifiedops /var/lib/unifiedops
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>UnifiedOps - Dev Trap Sender</title>
+<style>
+  :root {
+    --bg:        #0b0f14;
+    --bg-card:   #131922;
+    --bg-input:  #0e131a;
+    --border:    #232c39;
+    --text:      #e6edf3;
+    --text-dim:  #98a2b3;
+    --accent:    #4f8bff;
+    --accent-2:  #29c47a;
+    --warn:      #f9a826;
+    --err:       #f97066;
+    --info:      #5ac8fa;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 0;
+    font-family: -apple-system, "Segoe UI", system-ui, Roboto, "Helvetica Neue", Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 14px;
+    line-height: 1.4;
+  }
+  header {
+    padding: 16px 28px;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    background: var(--bg-card);
+  }
+  header h1 { margin: 0; font-size: 18px; font-weight: 600; }
+  header .badge {
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    border-radius: 999px;
+    padding: 4px 10px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  main {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 24px;
+    display: grid;
+    grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.2fr);
+    gap: 24px;
+  }
+  @media (max-width: 1000px) { main { grid-template-columns: 1fr; } }
+  .card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
+  }
+  .card h2 {
+    margin: 0 0 16px 0;
+    font-size: 14px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-dim);
+  }
+  .form-row {
+    display: grid;
+    grid-template-columns: 130px 1fr;
+    gap: 12px;
+    align-items: center;
+    margin-bottom: 12px;
+  }
+  .form-row label { color: var(--text-dim); font-size: 12px; }
+  .form-row input,
+  .form-row select,
+  .form-row textarea {
+    background: var(--bg-input);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-size: 13px;
+    font-family: inherit;
+    width: 100%;
+  }
+  .form-row textarea { min-height: 60px; resize: vertical; font-family: ui-monospace, "JetBrains Mono", Consolas, monospace; font-size: 12px; }
+  .form-row input:focus,
+  .form-row select:focus,
+  .form-row textarea:focus { outline: none; border-color: var(--accent); }
+  .form-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .toggle-group {
+    display: flex; gap: 8px;
+  }
+  .toggle-group button {
+    background: var(--bg-input);
+    color: var(--text-dim);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 12px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: 120ms ease;
+  }
+  .toggle-group button[aria-pressed="true"] {
+    background: rgba(79, 139, 255, 0.15);
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  .actions {
+    display: flex; gap: 10px; margin-top: 18px;
+    padding-top: 14px;
+    border-top: 1px solid var(--border);
+  }
+  button.primary, button.secondary {
+    border-radius: 6px;
+    padding: 9px 18px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: 120ms ease;
+  }
+  button.primary {
+    background: var(--accent);
+    color: white;
+  }
+  button.primary:hover { filter: brightness(1.08); }
+  button.primary:disabled { opacity: 0.5; cursor: not-allowed; }
+  button.secondary {
+    background: transparent;
+    border-color: var(--border);
+    color: var(--text);
+  }
+  button.secondary:hover { border-color: var(--text-dim); }
+  .preview {
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 12px;
+    margin-top: 14px;
+    font-family: ui-monospace, "JetBrains Mono", Consolas, monospace;
+    font-size: 11.5px;
+    white-space: pre-wrap;
+    word-break: break-all;
+    color: var(--text-dim);
+    max-height: 100px;
+    overflow-y: auto;
+  }
+  .preview .label {
+    color: var(--text-dim);
+    font-family: inherit;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    display: block;
+    margin-bottom: 6px;
+  }
+  .status-banner {
+    margin-top: 14px;
+    padding: 10px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    display: none;
+  }
+  .status-banner.ok    { background: rgba(41, 196, 122, 0.12); color: var(--accent-2); border: 1px solid rgba(41,196,122,0.3); display: block; }
+  .status-banner.err   { background: rgba(249, 112, 102, 0.12); color: var(--err); border: 1px solid rgba(249,112,102,0.3); display: block; }
+  .status-banner.warn  { background: rgba(249, 168, 38, 0.12); color: var(--warn); border: 1px solid rgba(249,168,38,0.3); display: block; }
+  table.history {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+  table.history th, table.history td {
+    text-align: left;
+    padding: 8px 6px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  table.history th {
+    color: var(--text-dim);
+    font-weight: 500;
+    text-transform: uppercase;
+    font-size: 10.5px;
+    letter-spacing: 0.06em;
+  }
+  table.history tr:last-child td { border-bottom: none; }
+  table.history td.mono {
+    font-family: ui-monospace, "JetBrains Mono", Consolas, monospace;
+    color: var(--text-dim);
+    font-size: 11px;
+  }
+  .sev-pill {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 10.5px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .sev-Acute    { background: rgba(249,112,102,0.18); color: var(--err); }
+  .sev-Serious  { background: rgba(249,168,38,0.18); color: var(--warn); }
+  .sev-Moderate { background: rgba(249,168,38,0.10); color: var(--warn); }
+  .sev-Service  { background: rgba(90,200,250,0.16); color: var(--info); }
+  .sev-Info     { background: rgba(152,162,179,0.16); color: var(--text-dim); }
+  .empty {
+    color: var(--text-dim);
+    padding: 20px 0;
+    text-align: center;
+    font-size: 12px;
+  }
+  .row-flex { display: flex; gap: 10px; align-items: center; }
+  .helper { font-size: 11px; color: var(--text-dim); margin-top: 6px; margin-left: 142px; }
+  .scroll {
+    max-height: 460px;
+    overflow-y: auto;
+  }
+  .scroll::-webkit-scrollbar { width: 8px; }
+  .scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="row-flex">
+    <h1>UnifiedOps - Dev Trap Sender</h1>
+    <span class="badge" id="catalog-size">loading...</span>
+  </div>
+  <div class="row-flex">
+    <span class="badge" id="health-pill">checking...</span>
+  </div>
+</header>
+
+<main>
+  <!-- LEFT: form -->
+  <section class="card">
+    <h2>Compose syslog trap</h2>
+
+    <div class="form-row">
+      <label for="vendor">Vendor</label>
+      <select id="vendor"></select>
+    </div>
+
+    <div class="form-row">
+      <label for="location">Location</label>
+      <select id="location"></select>
+    </div>
+
+    <div class="form-row">
+      <label for="source_ip">Source IP</label>
+      <select id="source_ip"></select>
+    </div>
+
+    <div class="form-row">
+      <label for="refcode">SIM RefCode</label>
+      <select id="refcode"></select>
+    </div>
+
+    <div class="form-row">
+      <label for="severity">Severity</label>
+      <select id="severity">
+        <option value="">(catalogue default)</option>
+      </select>
+    </div>
+
+    <div class="form-row">
+      <label for="text">Text override</label>
+      <textarea id="text" placeholder="empty = catalogue text"></textarea>
+    </div>
+
+    <div class="form-row">
+      <label>Envelope</label>
+      <div class="toggle-group">
+        <button type="button" id="env-gum" aria-pressed="true">GUM / NewHitrack</button>
+        <button type="button" id="env-svp" aria-pressed="false">SVP / Hitachi_syslog</button>
+      </div>
+    </div>
+
+    <div class="form-row">
+      <label>Format</label>
+      <div class="toggle-group">
+        <button type="button" id="fmt-5424" aria-pressed="true">RFC5424</button>
+        <button type="button" id="fmt-3164" aria-pressed="false">RFC3164</button>
+      </div>
+    </div>
+
+    <div class="form-row">
+      <label>Burst</label>
+      <div class="form-grid-2">
+        <input type="number" id="count" value="1" min="1" max="500" />
+        <input type="number" id="interval" value="0" step="0.1" min="0" max="10" placeholder="interval (s)" />
+      </div>
+    </div>
+
+    <div class="form-row">
+      <label for="target">Target (override)</label>
+      <input type="text" id="target" placeholder="default per location" />
+    </div>
+    <div class="helper" id="target-helper"></div>
+
+    <div class="actions">
+      <button class="primary" id="send-btn">Send</button>
+      <button class="secondary" id="random-btn">Send Random</button>
+      <button class="secondary" id="preview-btn">Preview only</button>
+    </div>
+
+    <div class="preview" id="preview-box" hidden>
+      <span class="label">Last preview</span>
+      <span id="preview-content"></span>
+    </div>
+
+    <div class="status-banner" id="status-banner"></div>
+  </section>
+
+  <!-- RIGHT: history -->
+  <section class="card">
+    <h2 class="row-flex" style="justify-content: space-between;">
+      <span>Send history</span>
+      <button class="secondary" id="refresh-history" style="padding:4px 10px;font-size:11px;">Refresh</button>
+    </h2>
+    <div class="scroll">
+      <table class="history" id="history-table">
+        <thead>
+          <tr>
+            <th>Time</th>
+            <th>Vendor</th>
+            <th>Loc</th>
+            <th>Sev</th>
+            <th>RefCode</th>
+            <th>Array</th>
+            <th>Target</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td class="empty" colspan="7">No traps sent yet.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const state = {
+  vendors:   [],   // [{vendor, locations}]
+  vendor:    'Hitachi',
+  catalogue: [],   // [{severity, refcode, text}]
+  locations: {},   // {CDVL: {ips: [...], default_target: "..."}}
+  severities: [],
+  envGum: true,
+  rfc5424: true,
+};
+
+async function fetchJson(url, opts = {}) {
+  const r = await fetch(url, opts);
+  if (!r.ok) throw new Error(`${url} -> HTTP ${r.status}`);
+  return r.json();
+}
+
+function setBanner(kind, msg) {
+  const b = $('status-banner');
+  b.className = `status-banner ${kind}`;
+  b.textContent = msg;
+  if (kind === 'ok') setTimeout(() => { b.style.display = 'none'; }, 3000);
+}
+
+function setHealth(ok) {
+  const p = $('health-pill');
+  if (ok) { p.textContent = 'API up'; p.style.color = 'var(--accent-2)'; }
+  else    { p.textContent = 'API down'; p.style.color = 'var(--err)'; }
+}
+
+function populateVendors() {
+  const sel = $('vendor');
+  sel.innerHTML = '';
+  state.vendors.forEach(({ vendor }) => {
+    const o = document.createElement('option');
+    o.value = vendor; o.textContent = vendor;
+    sel.appendChild(o);
+  });
+  sel.value = state.vendor;
+  sel.addEventListener('change', onVendorChange);
+}
+
+async function onVendorChange() {
+  state.vendor = $('vendor').value;
+  try {
+    const [cat, locs] = await Promise.all([
+      fetchJson(`/api/catalog?vendor=${encodeURIComponent(state.vendor)}`),
+      fetchJson(`/api/locations?vendor=${encodeURIComponent(state.vendor)}`),
+    ]);
+    state.catalogue = cat;
+    state.locations = locs;
+  } catch (e) {
+    setBanner('err', `Failed to load ${state.vendor} metadata: ${e.message}`);
+    return;
+  }
+  populateCatalogue();
+  populateLocations();
+  // Hitachi-only toggles: disable envelope/format for other vendors.
+  const hitachi = state.vendor === 'Hitachi';
+  ['env-gum', 'env-svp', 'fmt-5424', 'fmt-3164'].forEach((id) => {
+    $(id).disabled = !hitachi;
+    $(id).style.opacity = hitachi ? '' : '0.4';
+  });
+}
+
+function populateLocations() {
+  const sel = $('location');
+  const prev = sel.value;
+  sel.innerHTML = '';
+  Object.keys(state.locations).forEach((loc) => {
+    const o = document.createElement('option');
+    o.value = loc; o.textContent = loc;
+    sel.appendChild(o);
+  });
+  if (prev && state.locations[prev]) sel.value = prev;
+  sel.onchange = onLocationChange;
+  onLocationChange();
+}
+
+function onLocationChange() {
+  const loc = $('location').value;
+  const sel = $('source_ip');
+  sel.innerHTML = '';
+  const randomOpt = document.createElement('option');
+  randomOpt.value = ''; randomOpt.textContent = '(random)';
+  sel.appendChild(randomOpt);
+  (state.locations[loc]?.ips || []).forEach(({ ip, array }) => {
+    const o = document.createElement('option');
+    o.value = ip; o.textContent = `${ip}  ->  ${array}`;
+    sel.appendChild(o);
+  });
+  $('target-helper').textContent = `default: ${state.locations[loc]?.default_target ?? ''}`;
+}
+
+function populateCatalogue() {
+  $('catalog-size').textContent = `${state.catalogue.length} ${state.vendor} codes loaded`;
+  const sel = $('refcode');
+  sel.innerHTML = '';
+  const randomOpt = document.createElement('option');
+  randomOpt.value = '__random__'; randomOpt.textContent = '(random catalogue entry)';
+  sel.appendChild(randomOpt);
+  state.catalogue.forEach(({ severity, refcode, text }) => {
+    const o = document.createElement('option');
+    o.value = refcode;
+    o.textContent = `${refcode}  [${severity}]  ${text}`;
+    sel.appendChild(o);
+  });
+}
+
+function populateSeverities() {
+  const sel = $('severity');
+  sel.innerHTML = '<option value="">(catalogue default)</option>';
+  state.severities.forEach((s) => {
+    const o = document.createElement('option');
+    o.value = s; o.textContent = s;
+    sel.appendChild(o);
+  });
+}
+
+function wireToggle(idOn, idOff, applyFn) {
+  $(idOn).addEventListener('click', () => {
+    $(idOn).setAttribute('aria-pressed', 'true');
+    $(idOff).setAttribute('aria-pressed', 'false');
+    applyFn(true);
+  });
+  $(idOff).addEventListener('click', () => {
+    $(idOn).setAttribute('aria-pressed', 'false');
+    $(idOff).setAttribute('aria-pressed', 'true');
+    applyFn(false);
+  });
+}
+
+function readForm({ random = false, previewOnly = false } = {}) {
+  const refcodeVal = $('refcode').value;
+  return {
+    body: {
+      vendor:      state.vendor,
+      location:    $('location').value,
+      source_ip:   $('source_ip').value || null,
+      refcode:     refcodeVal === '__random__' ? null : refcodeVal,
+      severity:    $('severity').value || null,
+      text:        $('text').value || null,
+      count:       Math.max(1, parseInt($('count').value, 10) || 1),
+      interval:    Math.max(0, parseFloat($('interval').value) || 0),
+      target:      $('target').value.trim() || null,
+      use_gum:     state.envGum,
+      rfc5424:     state.rfc5424,
+      random_pick: random || refcodeVal === '__random__',
+    },
+    previewOnly,
+  };
+}
+
+async function sendTrap({ random = false, previewOnly = false } = {}) {
+  const { body } = readForm({ random, previewOnly });
+
+  // Preview: dry-run by sending count=1 to a placeholder local socket?
+  // Simpler: re-use the real endpoint, then show the last packet from history.
+  // For pure preview we re-target count=1 and surface the packet without
+  // calling the API. We don't have a separate preview endpoint - server
+  // sends UDP. So "preview" just sends 1 and shows it.
+  // Behaviour matches CLI's --count=1.
+  if (previewOnly) {
+    body.count = 1;
+    body.interval = 0;
+  }
+
+  $('send-btn').disabled = true;
+  setBanner('ok', 'Sending...');
+  try {
+    const res = await fetchJson('/api/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (res.ok) {
+      setBanner('ok', `Sent ${res.sent} packet(s) -> ${res.records?.[0]?.target ?? ''}`);
+    } else {
+      setBanner('warn', `Sent ${res.sent}, errors: ${res.errors.join(' | ')}`);
+    }
+    if (res.records?.length) {
+      const last = res.records[res.records.length - 1];
+      $('preview-box').hidden = false;
+      $('preview-content').textContent = last.packet;
+    }
+    await refreshHistory();
+  } catch (e) {
+    setBanner('err', `Send failed: ${e.message}`);
+  } finally {
+    $('send-btn').disabled = false;
+  }
+}
+
+async function refreshHistory() {
+  let rows;
+  try { rows = await fetchJson('/api/history?limit=50'); }
+  catch { return; }
+  const tbody = $('history-table').querySelector('tbody');
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td class="empty" colspan="7">No traps sent yet.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map((r) => `
+    <tr>
+      <td class="mono">${r.ts}</td>
+      <td>${r.vendor ?? 'Hitachi'}</td>
+      <td>${r.location}</td>
+      <td><span class="sev-pill sev-${r.severity}">${r.severity}</span></td>
+      <td class="mono">${r.refcode}</td>
+      <td class="mono">${r.array_name}</td>
+      <td class="mono">${r.target}</td>
+    </tr>
+  `).join('');
+}
+
+async function checkHealth() {
+  try {
+    const j = await fetchJson('/healthz');
+    setHealth(j.ok === true);
+  } catch { setHealth(false); }
+}
+
+async function bootstrap() {
+  try {
+    const [cat, locs, sevs] = await Promise.all([
+      fetchJson('/api/catalog'),
+      fetchJson('/api/locations'),
+      fetchJson('/api/severities'),
+    ]);
+    state.catalogue  = cat;
+    state.locations  = locs;
+    state.severities = sevs;
+  } catch (e) {
+    setBanner('err', `Failed to load metadata: ${e.message}`);
+    return;
+  }
+  populateLocations();
+  populateSeverities();
+  populateCatalogue();
+  await checkHealth();
+  await refreshHistory();
+  // soft-poll history every 4s so externally-sent traps show up too
+  setInterval(refreshHistory, 4000);
+  setInterval(checkHealth, 8000);
+}
+
+wireToggle('env-gum', 'env-svp', (v) => { state.envGum = v; });
+wireToggle('fmt-5424', 'fmt-3164', (v) => { state.rfc5424 = v; });
+$('send-btn').addEventListener('click', () => sendTrap());
+$('random-btn').addEventListener('click', () => sendTrap({ random: true }));
+$('preview-btn').addEventListener('click', () => sendTrap({ previewOnly: true }));
+$('refresh-history').addEventListener('click', refreshHistory);
+
+bootstrap();
+</script>
+</body>
+</html>

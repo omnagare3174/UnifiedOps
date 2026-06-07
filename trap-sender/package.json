@@ -1,0 +1,28 @@
+{
+  "name": "unifiedops-trap-sender",
+  "private": true,
+  "version": "2.0.0-dev",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --port=7780 --host=0.0.0.0",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview --port=7780",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "lucide-react": "^1.17.0",
+    "motion": "^12.40.0",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "sonner": "^2.0.7"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.1",
+    "@types/react": "^19.1.10",
+    "@types/react-dom": "^19.1.7",
+    "@vitejs/plugin-react": "^5.0.4",
+    "babel-plugin-react-compiler": "^19.1.0-rc.3",
+    "typescript": "~5.9.2",
+    "vite": "^7.1.7"
+  }
+}

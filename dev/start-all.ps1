@@ -62,39 +62,14 @@ $Containers = @(
     @{ Name='unifiedops-influx-heartbeat-sify';   Port=$env:HEARTBEAT_SIFY_PORT;  Bucket=$env:HEARTBEAT_SIFY_BUCKET;  Token=$env:HEARTBEAT_SIFY_TOKEN  }
 )
 
-$Launchers = @(
-    'run-listener-cdvl.ps1',
-    'run-listener-bcp.ps1',
-    'run-listener-sify.ps1',
-    'run-listener-brocade-cdvl-sify.ps1',
-    'run-listener-brocade-bcp-uat.ps1',
-    'run-listener-netapp-cdvl.ps1',
-    'run-listener-netapp-bcp.ps1',
-    'run-listener-netapp-sify.ps1',
-    'run-listener-dell-cdvl.ps1',
-    'run-listener-dell-bcp.ps1',
-    'run-listener-dell-sify.ps1'
-)
-
-$ListenerPyFiles = @(
-    'syslog_trap_listener_cdvl.py',
-    'syslog_trap_listener_bcp.py',
-    'syslog_trap_listener_sify.py',
-    'syslog_trap_listener_cdvl_n_sify.py',
-    'syslog_trap_listener_bcp_n_uat.py',
-    'syslog_trap_listener_netapp_cdvl.py',
-    'syslog_trap_listener_netapp_bcp.py',
-    'syslog_trap_listener_netapp_sify.py',
-    'syslog_trap_listener_dell_cdvl.py',
-    'syslog_trap_listener_dell_bcp.py',
-    'syslog_trap_listener_dell_sify.py'
-)
+$Launchers = Get-ChildItem -Path $DevDir -Filter 'run-listener-*.ps1' | Select-Object -ExpandProperty Name
+$ListenerPyFiles = Get-ChildItem -Path (Join-Path $Root 'listener') -Filter 'syslog_trap_listener_*.py' | Select-Object -ExpandProperty Name
 
 function Stop-PythonByScript {
     param([string]$ScriptName)
     Get-CimInstance Win32_Process -Filter "Name='python.exe'" |
         Where-Object { $_.CommandLine -match [regex]::Escape($ScriptName) } |
-        ForEach-Object { try { Stop-Process -Id $_.ProcessId -Force -ErrorAction Stop } catch {} }
+        ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
 }
 
 function Wait-Influx-Healthy {
@@ -218,7 +193,8 @@ foreach ($lp in $Launchers) {
     }
     Write-Host "  start $lp"
     Start-Process -WindowStyle Hidden -FilePath 'powershell.exe' `
-        -ArgumentList '-NoLogo','-NoProfile','-ExecutionPolicy','Bypass','-File',$path
+        -ArgumentList '-NoLogo','-NoProfile','-ExecutionPolicy','Bypass','-File',$path `
+        -WorkingDirectory $DevDir
     Start-Sleep -Milliseconds 200
 }
 
@@ -233,13 +209,35 @@ Start-Sleep -Seconds 1
 
 $BackendScript = Join-Path $DevDir 'run-backend.ps1'
 Start-Process -WindowStyle Hidden -FilePath 'powershell.exe' `
-    -ArgumentList '-NoLogo','-NoProfile','-ExecutionPolicy','Bypass','-File',$BackendScript
+    -ArgumentList '-NoLogo','-NoProfile','-ExecutionPolicy','Bypass','-File',$BackendScript `
+    -WorkingDirectory $Root
 Write-Host "  start backend  -> http://${env:BACKEND_HOST}:${env:BACKEND_PORT}"
 
 $TrapUiScript = Join-Path $DevDir 'run-trap-ui.ps1'
 Start-Process -WindowStyle Hidden -FilePath 'powershell.exe' `
-    -ArgumentList '-NoLogo','-NoProfile','-ExecutionPolicy','Bypass','-File',$TrapUiScript
+    -ArgumentList '-NoLogo','-NoProfile','-ExecutionPolicy','Bypass','-File',$TrapUiScript `
+    -WorkingDirectory $DevDir
 Write-Host "  start trap-UI  -> http://${env:TRAP_UI_HOST}:${env:TRAP_UI_PORT}"
+
+Start-Sleep -Seconds 3
+
+# =============================================================================
+#   5. FRONTEND (VITE)
+# =============================================================================
+Write-Host ''
+Write-Host '=== 5/5  frontend (Vite) ===' -ForegroundColor Cyan
+
+# Kill existing Vite process
+Get-CimInstance Win32_Process -Filter "Name='node.exe'" |
+    Where-Object { $_.CommandLine -match 'vite' } |
+    ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+
+$FrontendDir = Join-Path $Root 'frontend'
+Start-Process -WindowStyle Hidden -FilePath 'powershell.exe' `
+    -ArgumentList '-NoLogo','-NoProfile','-ExecutionPolicy','Bypass','-Command',"cd `"$FrontendDir`"; npm run dev" `
+    -WorkingDirectory $FrontendDir
+
+Write-Host "  start frontend -> http://localhost:3000"
 
 Start-Sleep -Seconds 3
 
@@ -254,16 +252,20 @@ $running = podman ps --format '{{.Names}}' 2>$null |
     Sort-Object
 Write-Host ("  InfluxDB:    {0,2}/14 containers up" -f ($running | Measure-Object).Count)
 
-$pythonProcs = Get-CimInstance Win32_Process -Filter "Name='python.exe'" |
-    Where-Object { $_.CommandLine -match 'UnifiedOpsv2_dev' }
+$pythonProcs = Get-CimInstance Win32_Process -Filter "Name='python.exe'"
 $listenerCount = ($pythonProcs | Where-Object { $_.CommandLine -match 'syslog_trap_listener' } | Measure-Object).Count
 $backendUp     = ($pythonProcs | Where-Object { $_.CommandLine -match 'server\\server\.py' } | Measure-Object).Count
 $trapUiUp      = ($pythonProcs | Where-Object { $_.CommandLine -match 'trap_sender_ui\.py' } | Measure-Object).Count
 
-Write-Host ("  Listeners:   {0,2}/11 processes" -f $listenerCount)
+$nodeProcs = Get-CimInstance Win32_Process -Filter "Name='node.exe'"
+$frontendUp = ($nodeProcs | Where-Object { $_.CommandLine -match 'vite' } | Measure-Object).Count
+
+Write-Host ("  Listeners:   {0,2}/$($ListenerPyFiles.Count) processes" -f $listenerCount)
 Write-Host ("  Backend:     {0}/1" -f $backendUp)
 Write-Host ("  Trap-UI:     {0}/1" -f $trapUiUp)
+Write-Host ("  Frontend:    {0}/1" -f $frontendUp)
 
 Write-Host ''
+Write-Host "Open the frontend at http://localhost:3000/" -ForegroundColor Green
 Write-Host "Open the dashboard at http://${env:BACKEND_HOST}:${env:BACKEND_PORT}/" -ForegroundColor Green
 Write-Host "Open the trap-sender at http://${env:TRAP_UI_HOST}:${env:TRAP_UI_PORT}/" -ForegroundColor Green

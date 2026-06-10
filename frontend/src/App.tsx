@@ -36,6 +36,7 @@ import {
   SEVERITY_PALETTE,
 } from './data/config';
 import { bestCategory, normalizeCategory } from './utils/category';
+import { ReportPanel } from './components/ReportPanel';
 import type {
   Location,
   RecentAlert,
@@ -657,58 +658,58 @@ export default function App() {
       )}
 
       <div className="dashboard">
-        <TotalAlertsCard
-          className="area-total"
-          total={totalsForRange.total}
-          delta={totalsForRange.delta}
-          rangeLabel={label}
-          spark={sparkData}
-        />
-
-        <AlertSeverityCard
-          className="area-severity"
-          data={severityData}
-          onView={() => openModal(null)}
-          onSliceClick={(r) => openModal({ severity: r.key })}
-        />
-
-        <AlertTrendCard
-          className="area-trend"
-          data={trendData}
-          rangeLabel={label}
-        />
-
-        <TopSystemsCard
-          className="area-systems"
-          systems={filteredSystems}
-          selectedLocations={locations}
-          allLocations={ALL_LOCATIONS}
-          onLocationsChange={setLocations}
-          onView={() => openModal(null)}
-          onSystemClick={(s) => openModal({ storage: s.name })}
-        />
-
-        <AlertTypeBreakdownCard
-          className="area-type"
-          data={alertTypeData}
-          rangeLabel={label}
-          onView={() => openModal(null)}
-          onSliceClick={(r) => openModal({ category: r.name })}
-        />
-
-        <div className="area-bottom bottom-bar">
-          <RecentCriticalAlertsCard
-            alerts={filteredAlerts}
+          <TotalAlertsCard
+            className="area-total"
+            total={totalsForRange.total}
+            delta={totalsForRange.delta}
             rangeLabel={label}
-            loading={dashLoading && filteredAlerts.length === 0}
+            spark={sparkData}
+          />
+
+          <AlertSeverityCard
+            className="area-severity"
+            data={severityData}
             onView={() => openModal(null)}
+            onSliceClick={(r) => openModal({ severity: r.key })}
           />
-          <NTPCard
-            alertCount={ntpAlertCount}
+
+          <AlertTrendCard
+            className="area-trend"
+            data={trendData}
             rangeLabel={label}
-            onView={() => openModal({ category: 'NTP' })}
           />
-        </div>
+
+          <TopSystemsCard
+            className="area-systems"
+            systems={filteredSystems}
+            selectedLocations={locations}
+            allLocations={ALL_LOCATIONS}
+            onLocationsChange={setLocations}
+            onView={() => openModal(null)}
+            onSystemClick={(s) => openModal({ storage: s.name })}
+          />
+
+          <AlertTypeBreakdownCard
+            className="area-type"
+            data={alertTypeData}
+            rangeLabel={label}
+            onView={() => openModal(null)}
+            onSliceClick={(r) => openModal({ category: r.name })}
+          />
+
+          <div className="area-bottom bottom-bar">
+            <RecentCriticalAlertsCard
+              alerts={filteredAlerts}
+              rangeLabel={label}
+              loading={dashLoading && filteredAlerts.length === 0}
+              onView={() => openModal(null)}
+            />
+            <NTPCard
+              alertCount={ntpAlertCount}
+              rangeLabel={label}
+              onView={() => openModal({ category: 'NTP' })}
+            />
+          </div>
       </div>
 
       <AlertDetailsModal
@@ -722,6 +723,7 @@ export default function App() {
 
       <ToastStack toasts={toasts} onDismiss={dismissToast} />
       <ScreenBlink triggerKey={blinkKey} color={blinkColor} />
+      <ReportPanel />
 
       {activeInfraModal && (
         <InfrastructureDownModal

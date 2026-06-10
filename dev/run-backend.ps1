@@ -87,4 +87,4 @@ $env:HITRACK_LISTENER_POLL_SECS         = $env:LISTENER_POLL_SECS
 $env:HITRACK_LISTENER_DOWN_THRESHOLD_S  = $env:LISTENER_DOWN_THRESHOLD_S
 
 $root = Split-Path -Parent $PSScriptRoot
-& "$root\.venv\Scripts\python.exe" "$root\server\server.py"
+& "$root\.venv\Scripts\python.exe" "$root\server\server.py" *> "$root\server.log"

@@ -322,6 +322,8 @@ def classify_source(ip_str):
     # Dev / lab bypass — see syslog_trap_listener_cdvl_n_sify.py for rationale.
     if os.environ.get("HITRACK_ACCEPT_LOOPBACK", "1") == "1" and addr.is_loopback:
         return "san_switch"
+    if TEST_MODE and os.environ.get("HITRACK_ACCEPT_LOOPBACK", "1") == "1" and ip_str in SWITCH_IP_TO_NAME:
+        return "san_switch"
     for network, measurement in FILTER_TABLE:
         if addr in network:
             return measurement

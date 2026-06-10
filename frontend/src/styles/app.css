@@ -1155,20 +1155,38 @@ body::after {
 /* Skeleton shimmer used by the loading state of AlertsDataTable + cards */
 .skeleton {
   display: inline-block;
+  position: relative;
+  border-radius: inherit;
   background:
     linear-gradient(
       90deg,
-      rgba(255, 255, 255, 0.02) 0%,
-      rgba(255, 255, 255, 0.08) 40%,
-      rgba(255, 255, 255, 0.02) 80%
+      rgba(255, 255, 255, 0.06) 0%,
+      rgba(230, 0, 18, 0.18) 20%,
+      rgba(255, 106, 0, 0.18) 40%,
+      rgba(92, 225, 255, 0.18) 60%,
+      rgba(0, 103, 197, 0.18) 80%,
+      rgba(255, 255, 255, 0.06) 100%
     );
-  background-size: 200% 100%;
-  animation: skeleton-shimmer 1.4s ease-in-out infinite;
+  background-size: 300% 100%;
+  animation: skeleton-shimmer 2s ease-in-out infinite;
+}
+
+.skeleton::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: inherit;
+  background-size: inherit;
+  animation: inherit;
+  filter: blur(5px);
+  opacity: 0.7;
+  z-index: -1;
 }
 
 @keyframes skeleton-shimmer {
-  0%   { background-position:  200% 0; }
-  100% { background-position: -200% 0; }
+  0%   { background-position:  300% 0; }
+  100% { background-position: -300% 0; }
 }
 
 .alerts-row--skeleton td {
@@ -2530,14 +2548,28 @@ body::after {
   left: 0;
   right: 0;
   min-width: unset;
-  max-height: 320px;
-  overflow-y: auto;
 }
 
-.rp-dropdown::-webkit-scrollbar { width: 6px; }
-.rp-dropdown::-webkit-scrollbar-track { background: transparent; }
-.rp-dropdown::-webkit-scrollbar-thumb { background: var(--border-mid); border-radius: 3px; }
-.rp-dropdown::-webkit-scrollbar-thumb:hover { background: var(--border-strong); }
+/* Range dropdown: outer shell doesn't scroll, inner scroll area does */
+.rp-dropdown--range {
+  max-height: none;
+  overflow: visible;
+  display: flex;
+  flex-direction: column;
+}
+
+.rp-dropdown__scroll {
+  max-height: 280px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.rp-dropdown__scroll::-webkit-scrollbar { width: 6px; }
+.rp-dropdown__scroll::-webkit-scrollbar-track { background: transparent; }
+.rp-dropdown__scroll::-webkit-scrollbar-thumb { background: var(--border-mid); border-radius: 3px; }
+.rp-dropdown__scroll::-webkit-scrollbar-thumb:hover { background: var(--border-strong); }
 
 /* Dot indicator for locations / OEMs */
 .rp-dropdown .dot,

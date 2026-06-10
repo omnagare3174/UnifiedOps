@@ -24,6 +24,7 @@ Python 3.9+ compatible.
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
 import time
@@ -44,12 +45,14 @@ from services.alert_monitor          import AlertMonitor, VENDOR_BUCKETS
 from services.health_check           import HealthCheckMonitor, HEARTBEAT_PIPELINES
 from services.dashboard              import DashboardService
 from services.dashboard_broadcaster  import DashboardBroadcaster
+from services.reports                import ReportService
 
 # Routers
 from routers import dashboard as dashboard_router
 from routers import alerts    as alerts_router
 from routers import health    as health_router
 from routers import websocket as ws_router
+from routers import reports   as reports_router
 
 
 # ---------------------------------------------------------------------------
@@ -92,12 +95,13 @@ _alert_monitor:   Optional[AlertMonitor]          = None
 _health_monitor:  Optional[HealthCheckMonitor]    = None
 _dashboard:       Optional[DashboardService]      = None
 _dashboard_bc:    Optional[DashboardBroadcaster]  = None
+_reports:         Optional[ReportService]         = None
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     global _executor, _influx_pool, _alerts_hub, _health_hub
-    global _alert_monitor, _health_monitor, _dashboard, _dashboard_bc
+    global _alert_monitor, _health_monitor, _dashboard, _dashboard_bc, _reports
 
     _executor = ThreadPoolExecutor(
         max_workers=THREAD_POOL_WORKERS,
@@ -113,6 +117,7 @@ async def lifespan(_app: FastAPI):
     _health_monitor = HealthCheckMonitor(_influx_pool, _health_hub, alert_monitor=_alert_monitor)
     _dashboard      = DashboardService(_influx_pool)
     _dashboard_bc   = DashboardBroadcaster(_dashboard)
+    _reports        = ReportService(_influx_pool)
 
     await _alert_monitor.start()
     await _health_monitor.start()
@@ -120,6 +125,7 @@ async def lifespan(_app: FastAPI):
 
     # Wire the routers — each gets ONLY the dependencies it needs.
     dashboard_router.configure(_dashboard)
+    reports_router.configure(_reports)
     alerts_router.configure(_alert_monitor)
     health_router.configure(
         _alert_monitor, _health_monitor,
@@ -149,6 +155,7 @@ async def lifespan(_app: FastAPI):
             _influx_pool.close()
         if _executor is not None:
             _executor.shutdown(wait=False, cancel_futures=True)
+        _reports = None
         _dashboard_bc = None
         _alert_monitor = None
         _health_monitor = None
@@ -178,6 +185,7 @@ app.add_middleware(
 # for the SPA fallback below, which must be last.
 app.include_router(dashboard_router.router)
 app.include_router(alerts_router.router)
+app.include_router(reports_router.router)
 app.include_router(health_router.router)
 app.include_router(ws_router.router)
 
@@ -197,10 +205,84 @@ async def healthz(request: Request) -> Dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
+# Runtime config endpoint
+#
+# Lets operators tweak frontend behaviour AT DEPLOY TIME without rebuilding
+# the React bundle. Any `UNIFIEDOPS_PUBLIC_*` env var (set in the systemd
+# unit's EnvironmentFile or `Environment=` lines) is auto-exposed on
+# `window.__UNIFIEDOPS_CONFIG__` so the SPA can read it on boot.
+#
+# The serialized JS payload is loaded by `index.html` BEFORE the main
+# bundle, so React sees the config at first paint — no flash, no extra
+# round-trip.
+# ---------------------------------------------------------------------------
+_PUBLIC_ENV_PREFIX = "UNIFIEDOPS_PUBLIC_"
+
+# Well-known keys with sensible defaults so the front-end never has to
+# guess. Operators override any of these by setting the matching env var.
+_PUBLIC_DEFAULTS: Dict[str, str] = {
+    "BRAND_TITLE":        "UnifiedOps",
+    "BRAND_LOGO_LEFT":    "/wipro.png",
+    "BRAND_LOGO_RIGHT":   "/hdfc.png",
+    "DASHBOARD_TITLE":    "UnifiedOps v2",
+    "DEFAULT_RANGE":      "6h",
+    "API_BASE":           "",            # empty = same origin
+    "WS_BASE":            "",            # empty = same origin (auto ws:// vs wss://)
+    "SITES":              "CDVL,BCP,SIFY",
+    "VENDORS":            "hitachi,brocade,netapp,dell",
+    "REFRESH_HINT_TEXT":  "Live · 5s",
+}
+
+
+def _build_runtime_config() -> Dict[str, str]:
+    cfg: Dict[str, str] = {}
+    for key, default in _PUBLIC_DEFAULTS.items():
+        cfg[key] = os.environ.get(_PUBLIC_ENV_PREFIX + key, default)
+    # Pass-through any extra UNIFIEDOPS_PUBLIC_* var so new knobs can be
+    # added without code changes — just drop a line into the env file.
+    for env_key, env_val in os.environ.items():
+        if not env_key.startswith(_PUBLIC_ENV_PREFIX):
+            continue
+        short = env_key[len(_PUBLIC_ENV_PREFIX):]
+        if short and short not in cfg:
+            cfg[short] = env_val
+    return cfg
+
+
+@app.get("/runtime-config.js", include_in_schema=False)
+def runtime_config_js() -> Response:
+    payload = json.dumps(_build_runtime_config(), separators=(",", ":"))
+    body = f"window.__UNIFIEDOPS_CONFIG__ = Object.freeze({payload});\n"
+    return Response(
+        content=body,
+        media_type="application/javascript",
+        headers={"Cache-Control": "no-store, max-age=0"},
+    )
+
+
+# ---------------------------------------------------------------------------
 # Static SPA bundle — MUST be the last route.
 # ---------------------------------------------------------------------------
 if (DIST_DIR / "assets").is_dir():
     app.mount("/assets", StaticFiles(directory=str(DIST_DIR / "assets")), name="assets")
+
+
+def _index_html_with_config_tag() -> str:
+    """Read the built index.html and ensure a <script src="/runtime-config.js">
+    tag is present BEFORE the main bundle script. Idempotent: re-runs
+    safely if the tag is already there from a previous build."""
+    html = (DIST_DIR / "index.html").read_text(encoding="utf-8")
+    if "/runtime-config.js" in html:
+        return html
+    tag = '    <script src="/runtime-config.js"></script>\n'
+    # Inject right before the first module bundle reference so config is
+    # set on window before any React code runs.
+    needle = '<script type="module"'
+    idx = html.find(needle)
+    if idx == -1:
+        return html
+    line_start = html.rfind("\n", 0, idx) + 1
+    return html[:line_start] + tag + html[line_start:]
 
 
 @app.get("/{full_path:path}", include_in_schema=False)
@@ -218,10 +300,15 @@ async def spa(full_path: str) -> Response:
         )
     no_store = {"Cache-Control": "no-store, max-age=0"}
     candidate = (DIST_DIR / full_path) if full_path else (DIST_DIR / "index.html")
-    if candidate.is_file():
-        headers = no_store if candidate.suffix.lower() in {".html", ""} else None
-        return FileResponse(candidate, headers=headers)
-    return FileResponse(DIST_DIR / "index.html", headers=no_store)
+    if candidate.is_file() and candidate.suffix.lower() not in {".html", ""}:
+        return FileResponse(candidate)
+    # HTML / catch-all → serve the SPA shell with the config-script tag
+    # patched in so the dist itself doesn't have to know about runtime config.
+    return Response(
+        content=_index_html_with_config_tag(),
+        media_type="text/html; charset=utf-8",
+        headers=no_store,
+    )
 
 
 # ---------------------------------------------------------------------------

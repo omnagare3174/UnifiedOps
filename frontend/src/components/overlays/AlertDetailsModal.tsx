@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import type { Location, RecentAlert, Severity, Vendor } from '../../types';
 import { FilterSelect } from './FilterSelect';
 import { AlertsDataTable } from '../tables/AlertsDataTable';
@@ -108,118 +109,134 @@ export function AlertDetailsModal({
     [alerts, live],
   );
 
-  if (!open) return null;
-
-  const updateField = <K extends keyof LiveFilters>(k: K, v: LiveFilters[K]) => {
-    setLive(prev => ({ ...prev, [k]: v }));
-  };
-
-  const activeCount = (
-    (live.severity ? 1 : 0) +
-    (live.vendor   ? 1 : 0) +
-    (live.location ? 1 : 0) +
-    (live.category ? 1 : 0) +
-    (live.storage  ? 1 : 0) +
-    (live.search   ? 1 : 0)
-  );
+  const activeCount = useMemo(() => {
+    let count = 0;
+    if (live.severity) count++;
+    if (live.vendor) count++;
+    if (live.location) count++;
+    if (live.category) count++;
+    if (live.storage) count++;
+    if (live.search) count++;
+    return count;
+  }, [live]);
 
   return (
-    <div className="modal" role="dialog" aria-modal="true" onClick={onClose}>
-      <div className="modal__card" onClick={(e) => e.stopPropagation()}>
-        <div className="modal__head">
-          <div>
-            <span className="modal__title">Alert Details</span>
-            <span className="modal__sub">{rangeLabel} · {filtered.length} matching</span>
-          </div>
-          <button
-            type="button"
-            className="modal__close"
-            aria-label="Close"
-            onClick={onClose}
+    <AnimatePresence>
+      {open && (
+        <motion.div 
+          className="modal" 
+          role="dialog" 
+          aria-modal="true" 
+          onClick={onClose}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.3 }}
+        >
+          <motion.div 
+            className="modal__card" 
+            onClick={(e) => e.stopPropagation()}
+            initial={{ scale: 0.95, opacity: 0, y: 10 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            exit={{ scale: 0.95, opacity: 0, y: 10 }}
+            transition={{ duration: 0.25, ease: "easeOut" }}
           >
-            ×
-          </button>
-        </div>
+            <div className="modal__head">
+              <div>
+                <span className="modal__title">Alert Details</span>
+                <span className="modal__sub">{rangeLabel} · {filtered.length} matching</span>
+              </div>
+              <button
+                type="button"
+                className="modal__close"
+                aria-label="Close"
+                onClick={onClose}
+              >
+                ×
+              </button>
+            </div>
 
-        <div className="modal__filters">
-          <FilterSelect
-            label="Severity"
-            value={live.severity}
-            onChange={(v) => updateField('severity', v as Severity | '')}
-            options={SEVERITIES.map(s => ({ value: s, label: titleCase(s) }))}
-            width={130}
-          />
+            <div className="modal__filters">
+              <FilterSelect
+                label="Severity"
+                value={live.severity}
+                onChange={(v) => updateField('severity', v as Severity | '')}
+                options={SEVERITIES.map(s => ({ value: s, label: titleCase(s) }))}
+                width={130}
+              />
 
-          <FilterSelect
-            label="Vendor"
-            value={live.vendor}
-            onChange={(v) => updateField('vendor', v as Vendor | '')}
-            options={VENDORS.map(v => ({ value: v, label: titleCase(v) }))}
-            width={120}
-          />
+              <FilterSelect
+                label="Vendor"
+                value={live.vendor}
+                onChange={(v) => updateField('vendor', v as Vendor | '')}
+                options={VENDORS.map(v => ({ value: v, label: titleCase(v) }))}
+                width={120}
+              />
 
-          <FilterSelect
-            label="Location"
-            value={live.location}
-            onChange={(v) => updateField('location', v as Location | '')}
-            options={LOCATIONS.map(l => ({ value: l, label: l }))}
-            width={110}
-          />
+              <FilterSelect
+                label="Location"
+                value={live.location}
+                onChange={(v) => updateField('location', v as Location | '')}
+                options={LOCATIONS.map(l => ({ value: l, label: l }))}
+                width={110}
+              />
 
-          <FilterSelect
-            label="Category"
-            value={live.category}
-            onChange={(v) => updateField('category', v)}
-            options={categoryOptions.map(c => ({ value: c, label: c }))}
-            searchable
-            width={170}
-          />
+              <FilterSelect
+                label="Category"
+                value={live.category}
+                onChange={(v) => updateField('category', v)}
+                options={categoryOptions.map(c => ({ value: c, label: c }))}
+                searchable
+                width={170}
+              />
 
-          <FilterSelect
-            label="Storage"
-            value={live.storage}
-            onChange={(v) => updateField('storage', v)}
-            options={storageOptions.map(s => ({ value: s, label: s }))}
-            searchable
-            width={200}
-          />
+              <FilterSelect
+                label="Storage"
+                value={live.storage}
+                onChange={(v) => updateField('storage', v)}
+                options={storageOptions.map(s => ({ value: s, label: s }))}
+                searchable
+                width={200}
+              />
 
-          <div className="modal-filter modal-filter--grow">
-            <label className="modal-filter__label">Search</label>
-            <input
-              type="text"
-              className="modal-filter__input"
-              placeholder="storage / IP / event text"
-              value={live.search}
-              onChange={(e) => updateField('search', e.target.value)}
-            />
-          </div>
+              <div className="modal-filter modal-filter--grow">
+                <label className="modal-filter__label">Search</label>
+                <input
+                  type="text"
+                  className="modal-filter__input"
+                  placeholder="storage / IP / event text"
+                  value={live.search}
+                  onChange={(e) => updateField('search', e.target.value)}
+                />
+              </div>
 
-          <button
-            type="button"
-            className="modal-filter__clear"
-            onClick={() => setLive(emptyLive())}
-            disabled={activeCount === 0}
-            title="Reset all filters"
-          >
-            Clear {activeCount > 0 ? `(${activeCount})` : ''}
-          </button>
-        </div>
+              <button
+                type="button"
+                className="modal-filter__clear"
+                onClick={() => setLive(emptyLive())}
+                disabled={activeCount === 0}
+                title="Reset all filters"
+              >
+                Clear {activeCount > 0 ? `(${activeCount})` : ''}
+              </button>
+            </div>
 
-        <div className="modal__body">
-          <AlertsDataTable
-            alerts={filtered}
-            variant="full"
-            infinite
-            pageSize={40}
-            emptyText={
-              activeCount > 0
-                ? 'No matching alerts (filters active)'
-                : `No matching alerts in ${rangeLabel.toLowerCase()}`
-            }
-          />
-        </div>
-      </div>
-    </div>
+            <div className="modal__body">
+              <AlertsDataTable
+                alerts={filtered}
+                variant="full"
+                infinite
+                pageSize={40}
+                emptyText={
+                  activeCount > 0
+                    ? 'No matching alerts (filters active)'
+                    : `No matching alerts in ${rangeLabel.toLowerCase()}`
+                }
+              />
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 }

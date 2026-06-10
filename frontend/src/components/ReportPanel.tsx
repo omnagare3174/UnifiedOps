@@ -44,6 +44,11 @@ export function ReportPanel() {
   const [oemOpen, setOemOpen]                 = useState(false);
   const oemRef = useRef<HTMLDivElement>(null);
 
+  /* ---- Format ---- */
+  const [format, setFormat] = useState<'csv'|'xlsx'|'pdf'>('csv');
+  const [formatOpen, setFormatOpen] = useState(false);
+  const formatRef = useRef<HTMLDivElement>(null);
+
   /* Close dropdowns on outside click */
   useEffect(() => {
     const onDown = (e: MouseEvent) => {
@@ -57,6 +62,9 @@ export function ReportPanel() {
       }
       if (oemRef.current && !oemRef.current.contains(e.target as Node)) {
         setOemOpen(false);
+      }
+      if (formatRef.current && !formatRef.current.contains(e.target as Node)) {
+        setFormatOpen(false);
       }
     };
     document.addEventListener('mousedown', onDown);
@@ -127,7 +135,22 @@ export function ReportPanel() {
     }
     selectedSites.forEach(s => params.append('site', s));
     selectedVendors.forEach(v => params.append('vendor', v));
+    params.append('format', format);
     window.open(`/api/reports/download?${params.toString()}`, '_blank');
+  };
+
+  const timeoutRef = useRef<number | null>(null);
+
+  const handleMouseEnter = () => {
+    if (timeoutRef.current) window.clearTimeout(timeoutRef.current);
+    setIsOpen(true);
+  };
+
+  const handleMouseLeave = () => {
+    if (rangeOpen || locOpen || oemOpen || showCustom || formatOpen) return;
+    timeoutRef.current = window.setTimeout(() => {
+      setIsOpen(false);
+    }, 400);
   };
 
   return (
@@ -135,8 +158,9 @@ export function ReportPanel() {
       {/* Trigger tab */}
       <div
         className="rp-trigger"
-        onMouseEnter={() => setIsOpen(true)}
-        onClick={() => setIsOpen(true)}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
+        onClick={handleMouseEnter}
       >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
           stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -161,7 +185,8 @@ export function ReportPanel() {
               exit={{ x: '100%' }}
               transition={{ type: 'spring', damping: 26, stiffness: 220 }}
               className="rp-panel"
-              onMouseLeave={() => setIsOpen(false)}
+              onMouseEnter={handleMouseEnter}
+              onMouseLeave={handleMouseLeave}
             >
               {/* ---- Header ---- */}
               <div className="rp-header">
@@ -206,25 +231,27 @@ export function ReportPanel() {
                     </button>
 
                     {rangeOpen && !showCustom && (
-                      <div className="dropdown-menu rp-dropdown" role="menu">
-                        {RANGE_OPTIONS.map(o => {
-                          const active = rangeMode === 'relative' && rangeKey === o.key;
-                          return (
-                            <button
-                              type="button"
-                              key={o.key}
-                              className={`dropdown-item ${active ? 'is-checked' : ''}`}
-                              onClick={() => {
-                                setRangeKey(o.key);
-                                setRangeMode('relative');
-                                setRangeOpen(false);
-                              }}
-                            >
-                              <span className="check-box">{active ? '✓' : ''}</span>
-                              <span>{o.label}</span>
-                            </button>
-                          );
-                        })}
+                      <div className="dropdown-menu rp-dropdown rp-dropdown--range" role="menu">
+                        <div className="rp-dropdown__scroll">
+                          {RANGE_OPTIONS.map(o => {
+                            const active = rangeMode === 'relative' && rangeKey === o.key;
+                            return (
+                              <button
+                                type="button"
+                                key={o.key}
+                                className={`dropdown-item ${active ? 'is-checked' : ''}`}
+                                onClick={() => {
+                                  setRangeKey(o.key);
+                                  setRangeMode('relative');
+                                  setRangeOpen(false);
+                                }}
+                              >
+                                <span className="check-box">{active ? '✓' : ''}</span>
+                                <span>{o.label}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
                         <div className="dropdown-divider" />
                         <button
                           type="button"
@@ -372,6 +399,44 @@ export function ReportPanel() {
                     )}
                   </div>
                 </div>
+
+                {/* Format */}
+                <div className="rp-field">
+                  <span className="rp-field__label">File Format</span>
+                  <div className="dropdown" ref={formatRef}>
+                    <button
+                      type="button"
+                      className="btn-pill rp-field__pill"
+                      onClick={() => setFormatOpen(v => !v)}
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" />
+                        <path d="M14 2v6h6" />
+                        <path d="M16 13H8" />
+                        <path d="M16 17H8" />
+                        <path d="M10 9H8" />
+                      </svg>
+                      <span>{format.toUpperCase()}</span>
+                      <ChevronDownIcon size={14} className={formatOpen ? 'chev chev--open' : 'chev'} />
+                    </button>
+
+                    {formatOpen && (
+                      <div className="dropdown-menu rp-dropdown" role="menu">
+                        {(['csv', 'xlsx', 'pdf'] as const).map(f => (
+                          <button
+                            type="button"
+                            key={f}
+                            className={`dropdown-item ${format === f ? 'is-checked' : ''}`}
+                            onClick={() => { setFormat(f); setFormatOpen(false); }}
+                          >
+                            <span className="check-box">{format === f ? '✓' : ''}</span>
+                            <span>{f.toUpperCase()}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
 
               {/* ---- Footer ---- */}
@@ -387,7 +452,7 @@ export function ReportPanel() {
                     <polyline points="7 10 12 15 17 10" />
                     <line x1="12" y1="15" x2="12" y2="3" />
                   </svg>
-                  <span>{canDownload ? 'Download CSV Report' : 'Select filters'}</span>
+                  <span>{canDownload ? `Download ${format.toUpperCase()} Report` : 'Select filters'}</span>
                 </button>
               </div>
             </motion.div>

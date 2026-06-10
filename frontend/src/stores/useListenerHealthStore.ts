@@ -6,6 +6,7 @@ import type {
   InfraEvent,
 } from '../hooks/useListenerHealth';
 import type { WsStatus } from '../hooks/useWebSocket';
+import { useModalStore } from './useModalStore';
 
 /**
  * Zustand store for listener heartbeat / site reachability.
@@ -67,15 +68,12 @@ export const useListenerHealthStore = create<ListenerHealthState>((set, get) => 
       asOf:            frame.as_of           ?? get().asOf,
       lastMessageAt:   Date.now(),
     });
-    // Dynamic import to avoid a circular dep at module-load time; safe
-    // because `useModalStore` is independently registered with zustand
-    // before any frame can arrive (App.tsx mounts both before opening WS).
-    import('./useModalStore').then(({ useModalStore }) => {
-      useModalStore.getState().syncAcks(
-        (frame.down_events  ?? get().downEvents ).map(e => e.key),
-        (frame.infra_events ?? get().infraEvents).map(e => e.key),
-      );
-    }).catch(() => { /* ignore */ });
+    // Sync acknowledgements using the static import.
+    // Safe because `useModalStore` is independently registered.
+    useModalStore.getState().syncAcks(
+      (frame.down_events  ?? get().downEvents ).map(e => e.key),
+      (frame.infra_events ?? get().infraEvents).map(e => e.key),
+    );
   },
 
   setWsStatus: (s) => {

@@ -12,6 +12,7 @@ import { ArrowDown, ArrowUp, ChevronsUpDown } from 'lucide-react';
 import type { RecentAlert, Severity } from '../../types';
 import { AlertRowHoverCard } from '../hover/AlertRowHoverCard';
 import { useAlertRowHover } from '../../hooks/useAlertRowHover';
+import { SkeletonRows } from '../skeleton/Skeleton';
 
 /**
  * Shared headless table for any alert list. TanStack provides sorting,
@@ -56,6 +57,8 @@ interface Props {
   pageSize?: number;
   /** Use infinite scroll instead of pagination. */
   infinite?: boolean;
+  /** Show loading skeleton rows */
+  loading?: boolean;
 }
 
 const columnHelper = createColumnHelper<RecentAlert>();
@@ -66,6 +69,7 @@ export function AlertsDataTable({
   emptyText = 'No alerts',
   paginate  = false,
   pageSize  = 25,
+  loading   = false,
 }: Props) {
   const { hover, onMove, onLeave } = useAlertRowHover();
 
@@ -200,7 +204,9 @@ export function AlertsDataTable({
             ))}
           </thead>
           <tbody>
-            {rows.length === 0 ? (
+            {loading ? (
+              <SkeletonRows cells={colCount} rows={paginate ? pageSize : 6} />
+            ) : rows.length === 0 ? (
               <tr>
                 <td colSpan={colCount} className="empty-row">
                   {emptyText}

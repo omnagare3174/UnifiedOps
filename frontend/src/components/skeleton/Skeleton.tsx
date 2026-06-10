@@ -17,7 +17,7 @@ interface Props {
  */
 export function Skeleton({
   width  = '100%',
-  height = 12,
+  height = 10,
   borderRadius = 4,
   className,
   style,
@@ -56,7 +56,7 @@ export function SkeletonRows({ cells, rows = 6 }: RowProps) {
                            `${60 + ((r * 13 + c * 7) % 30)}%`;
       tds.push(
         <td key={c}>
-          <Skeleton width={w} height={9} />
+          <Skeleton width={w} height={10} />
         </td>,
       );
     }

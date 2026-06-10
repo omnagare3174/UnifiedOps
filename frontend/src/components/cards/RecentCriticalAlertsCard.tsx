@@ -17,6 +17,7 @@ export function RecentCriticalAlertsCard({
   rangeLabel,
   onView,
   className,
+  loading,
 }: Props) {
   return (
     <Card
@@ -46,6 +47,7 @@ export function RecentCriticalAlertsCard({
       <AlertsDataTable
         alerts={alerts}
         variant="compact"
+        loading={loading}
         emptyText={`No alerts in ${rangeLabel.toLowerCase()} (received ${alerts.length})`}
       />
     </Card>

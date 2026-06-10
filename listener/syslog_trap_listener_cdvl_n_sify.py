@@ -358,6 +358,8 @@ def classify_source(ip_str):
         return None
     if _ACCEPT_LOOPBACK and addr.is_loopback:
         return "san_switch"
+    if TEST_MODE and _ACCEPT_LOOPBACK and ip_str in SWITCH_IP_TO_NAME:
+        return "san_switch"
     for network, measurement in FILTER_TABLE:
         if addr in network:
             return measurement

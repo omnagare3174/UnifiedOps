@@ -59,14 +59,14 @@ html, body {
    than fighting for attention in the corners. */
 .app {
   --aurora-a:
-    radial-gradient(58% 65% at 22% 30%, rgba(230, 0, 18, 0.28),    transparent 72%),
-    radial-gradient(56% 62% at 78% 28%, rgba(255, 106, 0, 0.26),   transparent 72%),
-    radial-gradient(60% 68% at 75% 76%, rgba(0, 103, 197, 0.32),   transparent 72%),
-    radial-gradient(58% 65% at 25% 78%, rgba(0, 133, 195, 0.28),   transparent 72%);
+    radial-gradient(58% 65% at 22% 30%, rgba(230, 0, 18, 0.65),    transparent 72%),
+    radial-gradient(56% 62% at 78% 28%, rgba(255, 106, 0, 0.60),   transparent 72%),
+    radial-gradient(60% 68% at 75% 76%, rgba(0, 103, 197, 0.70),   transparent 72%),
+    radial-gradient(58% 65% at 25% 78%, rgba(0, 133, 195, 0.65),   transparent 72%);
   --aurora-b:
-    radial-gradient(42% 46% at 50% 50%, rgba(255, 162, 77, 0.18),  transparent 72%),
-    radial-gradient(36% 42% at 32% 38%, rgba(255, 110, 120, 0.16), transparent 72%),
-    radial-gradient(36% 42% at 70% 64%, rgba(120, 200, 255, 0.18), transparent 72%);
+    radial-gradient(42% 46% at 50% 50%, rgba(255, 162, 77, 0.50),  transparent 72%),
+    radial-gradient(36% 42% at 32% 38%, rgba(255, 110, 120, 0.45), transparent 72%),
+    radial-gradient(36% 42% at 70% 64%, rgba(120, 200, 255, 0.50), transparent 72%);
   --ops-grad-stops:
     #E60012 0%,
     #FF6A00 20%,

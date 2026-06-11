@@ -28,20 +28,19 @@ export function AlertTrendCard({ data, rangeLabel, className }: Props) {
             <div style={{
               background: 'rgba(30, 35, 43, 0.8)',
               border: '1px solid #2d333b',
-              borderRadius: '8px',
-              padding: '10px 12px',
-              boxShadow: '0 8px 30px rgba(0,0,0,0.4)',
+              borderRadius: '6px',
+              padding: '6px 8px',
+              boxShadow: '0 4px 20px rgba(0,0,0,0.4)',
               backdropFilter: 'blur(8px)',
-              minWidth: '110px',
               display: 'flex',
               flexDirection: 'column',
-              gap: '6px'
+              gap: '4px'
             }}>
-              <span style={{ fontSize: '10px', color: '#94a3b8', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+              <span style={{ fontSize: '9px', color: '#94a3b8', fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
                 {p.timeLabel}
               </span>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#fafafa', fontWeight: 700, fontSize: '13px' }}>
-                <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: '#FF7A6F', boxShadow: '0 0 8px rgba(255, 122, 111, 0.8)' }} />
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#fafafa', fontWeight: 700, fontSize: '12px' }}>
+                <span style={{ display: 'inline-block', width: '6px', height: '6px', borderRadius: '50%', background: '#FF7A6F', boxShadow: '0 0 6px rgba(255, 122, 111, 0.8)' }} />
                 {p.value} alerts
               </div>
             </div>

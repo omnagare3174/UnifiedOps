@@ -1,23 +1,15 @@
 # =============================================================================
-#   UnifiedOps v2 - dev one-shot launcher
+#   UnifiedOps v2 - start-services.ps1
 # -----------------------------------------------------------------------------
-#   Single command to bring up the full local dev stack:
-#       1. 14 InfluxDB containers via direct `podman run`
-#          (the same names + tokens + buckets as podman-compose.yml,
-#          but no external docker-compose / podman-compose binary needed)
-#       2. 11 syslog trap listeners
-#       3. FastAPI backend (BACKEND_PORT, default 8001)
-#       4. Trap-sender UI (TRAP_UI_PORT, default 7700)
-#
-#   Idempotent: re-running starts only what's not already up.
-#       -Flush       wipe + recreate all containers/volumes from scratch
-#       -SkipPodman  Influx is already running (e.g. native install)
+#   Consolidated script to launch all local development services.
+#   Replaces start-all.ps1, run-backend.ps1, run-trap-ui.ps1, and 
+#   all run-listener-*.ps1 wrappers.
 #
 #   Usage:
 #       cd dev
-#       .\start-all.ps1                 # normal start
-#       .\start-all.ps1 -Flush          # wipe + recreate everything
-#       .\start-all.ps1 -SkipPodman     # only python services
+#       .\start-services.ps1                 # normal start
+#       .\start-services.ps1 -Flush          # wipe + recreate containers
+#       .\start-services.ps1 -SkipPodman     # only python/node services
 # =============================================================================
 [CmdletBinding()]
 param(
@@ -25,10 +17,6 @@ param(
     [switch] $SkipPodman
 )
 
-# Native commands like `podman` and `npm` write progress to stderr,
-# which PowerShell 5.1 surfaces as a NativeCommandError when
-# $ErrorActionPreference='Stop'. Use Continue at the script level and
-# guard the critical sections with explicit $LASTEXITCODE checks below.
 $ErrorActionPreference = 'Continue'
 
 $DevDir = $PSScriptRoot
@@ -42,7 +30,7 @@ if (-not (Test-Path $Venv)) {
 
 . (Join-Path $DevDir 'load-env.ps1')
 
-# ----- container topology -------------------------------------------------
+# ----- Container Topology -------------------------------------------------
 $Image = 'docker.io/influxdb:2.7'
 
 $Containers = @(
@@ -61,9 +49,6 @@ $Containers = @(
     @{ Name='unifiedops-influx-heartbeat-bcp';    Port=$env:HEARTBEAT_BCP_PORT;   Bucket=$env:HEARTBEAT_BCP_BUCKET;   Token=$env:HEARTBEAT_BCP_TOKEN   },
     @{ Name='unifiedops-influx-heartbeat-sify';   Port=$env:HEARTBEAT_SIFY_PORT;  Bucket=$env:HEARTBEAT_SIFY_BUCKET;  Token=$env:HEARTBEAT_SIFY_TOKEN  }
 )
-
-$Launchers = Get-ChildItem -Path $DevDir -Filter 'run-listener-*.ps1' | Select-Object -ExpandProperty Name
-$ListenerPyFiles = Get-ChildItem -Path (Join-Path $Root 'listener') -Filter 'syslog_trap_listener_*.py' | Select-Object -ExpandProperty Name
 
 function Stop-PythonByScript {
     param([string]$ScriptName)
@@ -88,10 +73,8 @@ function Wait-Influx-Healthy {
 
 function Ensure-Container {
     param($Cfg)
-
     $dataVol = "$($Cfg.Name)-data"
     $confVol = "$($Cfg.Name)-conf"
-
     $existing = & podman ps -a --format '{{.Names}}' 2>$null
     if ($existing -contains $Cfg.Name) {
         $status = & podman inspect --format '{{.State.Status}}' $Cfg.Name 2>$null
@@ -100,7 +83,6 @@ function Ensure-Container {
         }
         return
     }
-
     $bucket = $Cfg.Bucket
     $token  = $Cfg.Token
     $args = @(
@@ -182,19 +164,29 @@ foreach ($c in $Containers) {
 # =============================================================================
 Write-Host ''
 Write-Host '=== 3/4  syslog listeners ===' -ForegroundColor Cyan
-foreach ($pf in $ListenerPyFiles) { Stop-PythonByScript $pf }
+Get-ChildItem -Path (Join-Path $Root 'listener') -Filter 'syslog_trap_listener_*.py' | Select-Object -ExpandProperty Name | ForEach-Object { Stop-PythonByScript $_ }
 Start-Sleep -Seconds 1
 
-foreach ($lp in $Launchers) {
-    $path = Join-Path $DevDir $lp
-    if (-not (Test-Path $path)) {
-        Write-Host "  WARN: $lp not found - skipped" -ForegroundColor Yellow
-        continue
-    }
-    Write-Host "  start $lp"
-    Start-Process -WindowStyle Hidden -FilePath 'powershell.exe' `
-        -ArgumentList '-NoLogo','-NoProfile','-ExecutionPolicy','Bypass','-File',$path `
-        -WorkingDirectory $DevDir
+$Listeners = @(
+    @{ Name='bcp'; Script='syslog_trap_listener_bcp.py'; Port='5515'; Url="http://127.0.0.1:$($env:HITACHI_BCP_PORT)"; Bucket=$env:HITACHI_BCP_BUCKET; Token=$env:HITACHI_BCP_TOKEN; HbUrl="http://127.0.0.1:$($env:HEARTBEAT_BCP_PORT)"; HbBucket=$env:HEARTBEAT_BCP_BUCKET; HbToken=$env:HEARTBEAT_BCP_TOKEN },
+    @{ Name='brocade-bcp-uat'; Script='syslog_trap_listener_bcp_n_uat.py'; Port='5215'; Url="http://127.0.0.1:$($env:BROCADE_BCP_PORT)"; Bucket=$env:BROCADE_BCP_BUCKET; Token=$env:BROCADE_BCP_TOKEN; HbUrl="http://127.0.0.1:$($env:HEARTBEAT_BCP_PORT)"; HbBucket=$env:HEARTBEAT_BCP_BUCKET; HbToken=$env:HEARTBEAT_BCP_TOKEN },
+    @{ Name='brocade-cdvl-sify'; Script='syslog_trap_listener_cdvl_n_sify.py'; Port='5214'; Url="http://127.0.0.1:$($env:BROCADE_CDVL_PORT)"; Bucket=$env:BROCADE_CDVL_BUCKET; Token=$env:BROCADE_CDVL_TOKEN; HbUrl="http://127.0.0.1:$($env:HEARTBEAT_CDVL_PORT)"; HbBucket=$env:HEARTBEAT_CDVL_BUCKET; HbToken=$env:HEARTBEAT_CDVL_TOKEN },
+    @{ Name='cdvl'; Script='syslog_trap_listener_cdvl.py'; Port='5514'; Url="http://127.0.0.1:$($env:HITACHI_CDVL_PORT)"; Bucket=$env:HITACHI_CDVL_BUCKET; Token=$env:HITACHI_CDVL_TOKEN; HbUrl="http://127.0.0.1:$($env:HEARTBEAT_CDVL_PORT)"; HbBucket=$env:HEARTBEAT_CDVL_BUCKET; HbToken=$env:HEARTBEAT_CDVL_TOKEN },
+    @{ Name='dell-bcp'; Script='syslog_trap_listener_dell_bcp.py'; Port='5415'; Url="http://127.0.0.1:$($env:DELL_BCP_PORT)"; Bucket=$env:DELL_BCP_BUCKET; Token=$env:DELL_BCP_TOKEN; HbUrl="http://127.0.0.1:$($env:HEARTBEAT_BCP_PORT)"; HbBucket=$env:HEARTBEAT_BCP_BUCKET; HbToken=$env:HEARTBEAT_BCP_TOKEN },
+    @{ Name='dell-cdvl'; Script='syslog_trap_listener_dell_cdvl.py'; Port='5414'; Url="http://127.0.0.1:$($env:DELL_CDVL_PORT)"; Bucket=$env:DELL_CDVL_BUCKET; Token=$env:DELL_CDVL_TOKEN; HbUrl="http://127.0.0.1:$($env:HEARTBEAT_CDVL_PORT)"; HbBucket=$env:HEARTBEAT_CDVL_BUCKET; HbToken=$env:HEARTBEAT_CDVL_TOKEN },
+    @{ Name='dell-sify'; Script='syslog_trap_listener_dell_sify.py'; Port='5416'; Url="http://127.0.0.1:$($env:DELL_SIFY_PORT)"; Bucket=$env:DELL_SIFY_BUCKET; Token=$env:DELL_SIFY_TOKEN; HbUrl="http://127.0.0.1:$($env:HEARTBEAT_SIFY_PORT)"; HbBucket=$env:HEARTBEAT_SIFY_BUCKET; HbToken=$env:HEARTBEAT_SIFY_TOKEN },
+    @{ Name='netapp-bcp'; Script='syslog_trap_listener_netapp_bcp.py'; Port='5315'; Url="http://127.0.0.1:$($env:NETAPP_BCP_PORT)"; Bucket=$env:NETAPP_BCP_BUCKET; Token=$env:NETAPP_BCP_TOKEN; HbUrl="http://127.0.0.1:$($env:HEARTBEAT_BCP_PORT)"; HbBucket=$env:HEARTBEAT_BCP_BUCKET; HbToken=$env:HEARTBEAT_BCP_TOKEN },
+    @{ Name='netapp-cdvl'; Script='syslog_trap_listener_netapp_cdvl.py'; Port='5314'; Url="http://127.0.0.1:$($env:NETAPP_CDVL_PORT)"; Bucket=$env:NETAPP_CDVL_BUCKET; Token=$env:NETAPP_CDVL_TOKEN; HbUrl="http://127.0.0.1:$($env:HEARTBEAT_CDVL_PORT)"; HbBucket=$env:HEARTBEAT_CDVL_BUCKET; HbToken=$env:HEARTBEAT_CDVL_TOKEN },
+    @{ Name='netapp-sify'; Script='syslog_trap_listener_netapp_sify.py'; Port='5316'; Url="http://127.0.0.1:$($env:NETAPP_SIFY_PORT)"; Bucket=$env:NETAPP_SIFY_BUCKET; Token=$env:NETAPP_SIFY_TOKEN; HbUrl="http://127.0.0.1:$($env:HEARTBEAT_SIFY_PORT)"; HbBucket=$env:HEARTBEAT_SIFY_BUCKET; HbToken=$env:HEARTBEAT_SIFY_TOKEN },
+    @{ Name='sify'; Script='syslog_trap_listener_sify.py'; Port='5516'; Url="http://127.0.0.1:$($env:HITACHI_SIFY_PORT)"; Bucket=$env:HITACHI_SIFY_BUCKET; Token=$env:HITACHI_SIFY_TOKEN; HbUrl="http://127.0.0.1:$($env:HEARTBEAT_SIFY_PORT)"; HbBucket=$env:HEARTBEAT_SIFY_BUCKET; HbToken=$env:HEARTBEAT_SIFY_TOKEN }
+)
+
+$startup = New-CimInstance -ClassName Win32_ProcessStartup -ClientOnly -Property @{ ShowWindow = 0 }
+
+foreach ($l in $Listeners) {
+    Write-Host "  start listener: $($l.Name)"
+    $cmd = "`$env:HITRACK_INFLUX_URL='$($l.Url)'; `$env:HITRACK_INFLUX_TOKEN='$($l.Token)'; `$env:HITRACK_INFLUX_ORG='HDFC'; `$env:HITRACK_INFLUX_BUCKET='$($l.Bucket)'; `$env:HITRACK_LISTEN_HOST='127.0.0.1'; `$env:HITRACK_LISTEN_PORT='$($l.Port)'; `$env:HITRACK_TEST_MODE='1'; `$env:HITRACK_HEARTBEAT_URL='$($l.HbUrl)'; `$env:HITRACK_HEARTBEAT_TOKEN='$($l.HbToken)'; `$env:HITRACK_HEARTBEAT_ORG='HDFC'; `$env:HITRACK_HEARTBEAT_BUCKET='$($l.HbBucket)'; `$env:HITRACK_HEARTBEAT_INTERVAL='10'; & '$Venv' '$Root\listener\$($l.Script)'"
+    Start-Process -NoNewWindow -FilePath 'powershell.exe' -ArgumentList '-WindowStyle','Hidden','-NoProfile','-ExecutionPolicy','Bypass','-Command',$cmd -WorkingDirectory $Root
     Start-Sleep -Milliseconds 200
 }
 
@@ -207,17 +199,13 @@ Stop-PythonByScript 'server\server.py'
 Stop-PythonByScript 'dev\trap_sender_ui.py'
 Start-Sleep -Seconds 1
 
-$BackendScript = Join-Path $DevDir 'run-backend.ps1'
-Start-Process -WindowStyle Hidden -FilePath 'powershell.exe' `
-    -ArgumentList '-NoLogo','-NoProfile','-ExecutionPolicy','Bypass','-File',$BackendScript `
-    -WorkingDirectory $Root
 Write-Host "  start backend  -> http://${env:BACKEND_HOST}:${env:BACKEND_PORT}"
+$backendCmd = "`$env:HITRACK_UI_HOST='$env:BACKEND_HOST'; `$env:HITRACK_UI_PORT='$env:BACKEND_PORT'; `$env:HITRACK_INFLUX_CDVL_URL='http://127.0.0.1:$env:HITACHI_CDVL_PORT'; `$env:HITRACK_INFLUX_CDVL_TOKEN='$env:HITACHI_CDVL_TOKEN'; `$env:HITRACK_INFLUX_CDVL_ORG='$env:INFLUX_ORG'; `$env:HITRACK_INFLUX_CDVL_BUCKET='$env:HITACHI_CDVL_BUCKET'; `$env:HITRACK_INFLUX_BCP_URL='http://127.0.0.1:$env:HITACHI_BCP_PORT'; `$env:HITRACK_INFLUX_BCP_TOKEN='$env:HITACHI_BCP_TOKEN'; `$env:HITRACK_INFLUX_BCP_ORG='$env:INFLUX_ORG'; `$env:HITRACK_INFLUX_BCP_BUCKET='$env:HITACHI_BCP_BUCKET'; `$env:HITRACK_INFLUX_SIFY_URL='http://127.0.0.1:$env:HITACHI_SIFY_PORT'; `$env:HITRACK_INFLUX_SIFY_TOKEN='$env:HITACHI_SIFY_TOKEN'; `$env:HITRACK_INFLUX_SIFY_ORG='$env:INFLUX_ORG'; `$env:HITRACK_INFLUX_SIFY_BUCKET='$env:HITACHI_SIFY_BUCKET'; `$env:HITRACK_INFLUX_BROCADE_CDVL_URL='http://127.0.0.1:$env:BROCADE_CDVL_PORT'; `$env:HITRACK_INFLUX_BROCADE_CDVL_TOKEN='$env:BROCADE_CDVL_TOKEN'; `$env:HITRACK_INFLUX_BROCADE_CDVL_ORG='$env:INFLUX_ORG'; `$env:HITRACK_INFLUX_BROCADE_CDVL_BUCKET='$env:BROCADE_CDVL_BUCKET'; `$env:HITRACK_INFLUX_BROCADE_BCP_URL='http://127.0.0.1:$env:BROCADE_BCP_PORT'; `$env:HITRACK_INFLUX_BROCADE_BCP_TOKEN='$env:BROCADE_BCP_TOKEN'; `$env:HITRACK_INFLUX_BROCADE_BCP_ORG='$env:INFLUX_ORG'; `$env:HITRACK_INFLUX_BROCADE_BCP_BUCKET='$env:BROCADE_BCP_BUCKET'; `$env:HITRACK_INFLUX_NETAPP_CDVL_URL='http://127.0.0.1:$env:NETAPP_CDVL_PORT'; `$env:HITRACK_INFLUX_NETAPP_CDVL_TOKEN='$env:NETAPP_CDVL_TOKEN'; `$env:HITRACK_INFLUX_NETAPP_CDVL_ORG='$env:INFLUX_ORG'; `$env:HITRACK_INFLUX_NETAPP_CDVL_BUCKET='$env:NETAPP_CDVL_BUCKET'; `$env:HITRACK_INFLUX_NETAPP_BCP_URL='http://127.0.0.1:$env:NETAPP_BCP_PORT'; `$env:HITRACK_INFLUX_NETAPP_BCP_TOKEN='$env:NETAPP_BCP_TOKEN'; `$env:HITRACK_INFLUX_NETAPP_BCP_ORG='$env:INFLUX_ORG'; `$env:HITRACK_INFLUX_NETAPP_BCP_BUCKET='$env:NETAPP_BCP_BUCKET'; `$env:HITRACK_INFLUX_NETAPP_SIFY_URL='http://127.0.0.1:$env:NETAPP_SIFY_PORT'; `$env:HITRACK_INFLUX_NETAPP_SIFY_TOKEN='$env:NETAPP_SIFY_TOKEN'; `$env:HITRACK_INFLUX_NETAPP_SIFY_ORG='$env:INFLUX_ORG'; `$env:HITRACK_INFLUX_NETAPP_SIFY_BUCKET='$env:NETAPP_SIFY_BUCKET'; `$env:HITRACK_INFLUX_DELL_CDVL_URL='http://127.0.0.1:$env:DELL_CDVL_PORT'; `$env:HITRACK_INFLUX_DELL_CDVL_TOKEN='$env:DELL_CDVL_TOKEN'; `$env:HITRACK_INFLUX_DELL_CDVL_ORG='$env:INFLUX_ORG'; `$env:HITRACK_INFLUX_DELL_CDVL_BUCKET='$env:DELL_CDVL_BUCKET'; `$env:HITRACK_INFLUX_DELL_BCP_URL='http://127.0.0.1:$env:DELL_BCP_PORT'; `$env:HITRACK_INFLUX_DELL_BCP_TOKEN='$env:DELL_BCP_TOKEN'; `$env:HITRACK_INFLUX_DELL_BCP_ORG='$env:INFLUX_ORG'; `$env:HITRACK_INFLUX_DELL_BCP_BUCKET='$env:DELL_BCP_BUCKET'; `$env:HITRACK_INFLUX_DELL_SIFY_URL='http://127.0.0.1:$env:DELL_SIFY_PORT'; `$env:HITRACK_INFLUX_DELL_SIFY_TOKEN='$env:DELL_SIFY_TOKEN'; `$env:HITRACK_INFLUX_DELL_SIFY_ORG='$env:INFLUX_ORG'; `$env:HITRACK_INFLUX_DELL_SIFY_BUCKET='$env:DELL_SIFY_BUCKET'; `$env:HITRACK_HEARTBEAT_CDVL_URL='http://127.0.0.1:$env:HEARTBEAT_CDVL_PORT'; `$env:HITRACK_HEARTBEAT_CDVL_TOKEN='$env:HEARTBEAT_CDVL_TOKEN'; `$env:HITRACK_HEARTBEAT_CDVL_ORG='$env:INFLUX_ORG'; `$env:HITRACK_HEARTBEAT_CDVL_BUCKET='$env:HEARTBEAT_CDVL_BUCKET'; `$env:HITRACK_HEARTBEAT_BCP_URL='http://127.0.0.1:$env:HEARTBEAT_BCP_PORT'; `$env:HITRACK_HEARTBEAT_BCP_TOKEN='$env:HEARTBEAT_BCP_TOKEN'; `$env:HITRACK_HEARTBEAT_BCP_ORG='$env:INFLUX_ORG'; `$env:HITRACK_HEARTBEAT_BCP_BUCKET='$env:HEARTBEAT_BCP_BUCKET'; `$env:HITRACK_HEARTBEAT_SIFY_URL='http://127.0.0.1:$env:HEARTBEAT_SIFY_PORT'; `$env:HITRACK_HEARTBEAT_SIFY_TOKEN='$env:HEARTBEAT_SIFY_TOKEN'; `$env:HITRACK_HEARTBEAT_SIFY_ORG='$env:INFLUX_ORG'; `$env:HITRACK_HEARTBEAT_SIFY_BUCKET='$env:HEARTBEAT_SIFY_BUCKET'; `$env:HITRACK_VERIFY_TLS='$env:HITRACK_VERIFY_TLS'; `$env:HITRACK_PIPELINE_POLL_SECS='$env:PIPELINE_POLL_SECS'; `$env:HITRACK_LISTENER_POLL_SECS='$env:LISTENER_POLL_SECS'; `$env:HITRACK_LISTENER_DOWN_THRESHOLD_S='$env:LISTENER_DOWN_THRESHOLD_S'; & '$Venv' '$Root\server\server.py' *> '$Root\server.log'"
+Start-Process -NoNewWindow -FilePath 'powershell.exe' -ArgumentList '-WindowStyle','Hidden','-NoProfile','-ExecutionPolicy','Bypass','-Command',$backendCmd -WorkingDirectory $Root
 
-$TrapUiScript = Join-Path $DevDir 'run-trap-ui.ps1'
-Start-Process -WindowStyle Hidden -FilePath 'powershell.exe' `
-    -ArgumentList '-NoLogo','-NoProfile','-ExecutionPolicy','Bypass','-File',$TrapUiScript `
-    -WorkingDirectory $DevDir
 Write-Host "  start trap-UI  -> http://${env:TRAP_UI_HOST}:${env:TRAP_UI_PORT}"
+$trapUiCmd = "`$env:TRAP_UI_HOST='$env:TRAP_UI_HOST'; `$env:TRAP_UI_PORT='$env:TRAP_UI_PORT'; & '$Venv' '$Root\dev\trap_sender_ui.py'"
+Start-Process -NoNewWindow -FilePath 'powershell.exe' -ArgumentList '-WindowStyle','Hidden','-NoProfile','-ExecutionPolicy','Bypass','-Command',$trapUiCmd -WorkingDirectory $DevDir
 
 Start-Sleep -Seconds 3
 
@@ -233,9 +221,8 @@ Get-CimInstance Win32_Process -Filter "Name='node.exe'" |
     ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
 
 $FrontendDir = Join-Path $Root 'frontend'
-Start-Process -WindowStyle Hidden -FilePath 'powershell.exe' `
-    -ArgumentList '-NoLogo','-NoProfile','-ExecutionPolicy','Bypass','-Command',"cd `"$FrontendDir`"; npm run dev *> frontend.log" `
-    -WorkingDirectory $FrontendDir
+$viteCmd = "cd `"$FrontendDir`"; npm run dev *> frontend.log"
+Start-Process -NoNewWindow -FilePath 'powershell.exe' -ArgumentList '-WindowStyle','Hidden','-NoProfile','-ExecutionPolicy','Bypass','-Command',$viteCmd -WorkingDirectory $FrontendDir
 
 Write-Host "  start frontend -> http://localhost:3000"
 
@@ -247,9 +234,7 @@ Start-Sleep -Seconds 3
 Write-Host ''
 Write-Host '=== running services ===' -ForegroundColor Green
 
-$running = podman ps --format '{{.Names}}' 2>$null |
-    Where-Object { $_ -match '^unifiedops-influx-' } |
-    Sort-Object
+$running = podman ps --format '{{.Names}}' 2>$null | Where-Object { $_ -match '^unifiedops-influx-' } | Sort-Object
 Write-Host ("  InfluxDB:    {0,2}/14 containers up" -f ($running | Measure-Object).Count)
 
 $pythonProcs = Get-CimInstance Win32_Process -Filter "Name='python.exe'"
@@ -260,7 +245,7 @@ $trapUiUp      = ($pythonProcs | Where-Object { $_.CommandLine -match 'trap_send
 $nodeProcs = Get-CimInstance Win32_Process -Filter "Name='node.exe'"
 $frontendUp = ($nodeProcs | Where-Object { $_.CommandLine -match 'vite' } | Measure-Object).Count
 
-Write-Host ("  Listeners:   {0,2}/$($ListenerPyFiles.Count) processes" -f $listenerCount)
+Write-Host ("  Listeners:   {0,2}/11 processes" -f $listenerCount)
 Write-Host ("  Backend:     {0}/1" -f $backendUp)
 Write-Host ("  Trap-UI:     {0}/1" -f $trapUiUp)
 Write-Host ("  Frontend:    {0}/1" -f $frontendUp)

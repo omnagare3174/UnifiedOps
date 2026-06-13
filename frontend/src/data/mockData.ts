@@ -20,7 +20,6 @@ export const RANGE_OPTIONS: RangeOption[] = [
   { key: '6h',  label: 'Last 6 Hours'    },
   { key: '12h', label: 'Last 12 Hours'   },
   { key: '24h', label: 'Last 24 Hours'   },
-  { key: '1d',  label: 'Last 1 Day'      },
   { key: '2d',  label: 'Last 2 Days'     },
   { key: '3d',  label: 'Last 3 Days'     },
   { key: '7d',  label: 'Last 7 Days'     },
